@@ -1,10 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
+
+type MetricsMessage struct {
+	UptimeSeconds string `json:"uptime_seconds"`
+	Timestamp     string `json:"timestamp"`
+}
 
 func main() {
 	opts := mqtt.NewClientOptions().
@@ -17,7 +23,19 @@ func main() {
 	}
 
 	client.Subscribe("system/metrics", 0, func(c mqtt.Client, m mqtt.Message) {
-		fmt.Println("Received:", string(m.Payload()))
+		var msg MetricsMessage
+
+		err := json.Unmarshal(m.Payload(), &msg)
+		if err != nil {
+			fmt.Println("Invalid message:", err)
+			return
+		}
+
+		fmt.Printf(
+			"Uptime: %s seconds | Timestamp: %s\n",
+			msg.UptimeSeconds,
+			msg.Timestamp,
+		)
 	})
 
 	fmt.Println("Backend listening on system/metrics")
