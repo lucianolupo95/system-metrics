@@ -3,14 +3,19 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 type MetricsMessage struct {
-	UptimeSeconds string `json:"uptime_seconds"`
-	Timestamp     string `json:"timestamp"`
+	UptimeSeconds string  `json:"uptime_seconds"`
+	MemoryUsedKB  int64   `json:"memory_used_kb"`
+	CPUUsagePct   float64 `json:"cpu_usage_pct"`
+	Timestamp     string  `json:"timestamp"`
 }
+
+var lastMetrics *MetricsMessage
 
 func main() {
 	opts := mqtt.NewClientOptions().
@@ -25,19 +30,37 @@ func main() {
 	client.Subscribe("system/metrics", 0, func(c mqtt.Client, m mqtt.Message) {
 		var msg MetricsMessage
 
-		err := json.Unmarshal(m.Payload(), &msg)
-		if err != nil {
+		if err := json.Unmarshal(m.Payload(), &msg); err != nil {
 			fmt.Println("Invalid message:", err)
 			return
 		}
 
+		lastMetrics = &msg
+
 		fmt.Printf(
-			"Uptime: %s seconds | Timestamp: %s\n",
+			"Uptime: %s | RAM: %d KB | CPU: %.2f%%\n",
 			msg.UptimeSeconds,
-			msg.Timestamp,
+			msg.MemoryUsedKB,
+			msg.CPUUsagePct,
 		)
 	})
 
-	fmt.Println("Backend listening on system/metrics")
+	fmt.Println("Subscribed to MQTT topic system/metrics")
+
+	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		if lastMetrics == nil {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(lastMetrics)
+	})
+
+	go func() {
+		fmt.Println("HTTP server listening on :8080")
+		http.ListenAndServe(":8080", nil)
+	}()
+
 	select {}
 }
