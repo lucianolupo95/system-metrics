@@ -1,16 +1,59 @@
-# React + Vite
+---
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Versión 1 — Estado final ✅
 
-Currently, two official plugins are available:
+La Versión 1 del proyecto está completa y funcional.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Qué hace el sistema
 
-## React Compiler
+- Un **agent local**:
+  - Lee métricas reales del sistema (uptime, RAM usada, CPU).
+  - Publica métricas cada 5 segundos.
+  - Envía los datos como mensajes JSON vía MQTT.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Un **backend**:
+  - Se suscribe al tópico MQTT.
+  - Consume y parsea los mensajes.
+  - Muestra las métricas recibidas.
 
-## Expanding the ESLint configuration
+### Qué NO incluye esta versión
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Frontend o dashboard.
+- Persistencia en base de datos.
+- Autenticación.
+- Docker, cloud o servicios externos.
+
+### Objetivo cumplido
+
+Entender el flujo completo:
+**Sistema → Agent → MQTT → Backend**
+
+Con métricas reales y arquitectura desacoplada.
+
+---
+---
+
+## Versión 2 — Estado final ✅ (Dashboard)
+
+La Versión 2 agrega una interfaz web para visualizar métricas del sistema.
+
+### Qué incluye
+
+- Frontend en **React + Vite**.
+- UI con **MUI (Material UI)**.
+- Dashboard simple con tarjetas:
+  - Uptime (formateado).
+  - Memoria RAM usada.
+  - Uso de CPU con color según carga.
+- Actualización periódica mediante **polling HTTP**.
+- Backend expone métricas vía `/metrics` con CORS habilitado.
+
+### Qué NO incluye
+
+- WebSockets o tiempo real push.
+- Persistencia histórica.
+- Autenticación.
+- Docker o cloud.
+
+### Flujo completo
+
