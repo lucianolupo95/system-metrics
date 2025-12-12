@@ -18,25 +18,7 @@ type MetricsMessage struct {
 }
 
 func main() {
-	data, err := os.ReadFile("/proc/uptime")
-	if err != nil {
-		panic(err)
-	}
-
-	fields := strings.Fields(string(data))
-
-	msg := MetricsMessage{
-		UptimeSeconds: fields[0],
-		MemoryUsedKB:  readMemoryUsedKB(),
-		CPUUsagePct:   readCPUUsagePercent(),
-		Timestamp:     time.Now().UTC().Format(time.RFC3339),
-	}
-
-	jsonData, err := json.Marshal(msg)
-	if err != nil {
-		panic(err)
-	}
-
+	// 1) Configurar MQTT
 	opts := mqtt.NewClientOptions().
 		AddBroker("tcp://localhost:1883").
 		SetClientID("system-metrics-agent")
@@ -46,13 +28,45 @@ func main() {
 		panic(token.Error())
 	}
 
-	token := client.Publish("system/metrics", 0, false, jsonData)
-	token.Wait()
+	fmt.Println("Agent started, publishing metrics every 5s")
 
-	fmt.Println("Published:", string(jsonData))
+	// 2) Ticker para publicar periódicamente
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 
-	client.Disconnect(250)
+	for {
+		<-ticker.C
+
+		// Leer uptime
+		data, err := os.ReadFile("/proc/uptime")
+		if err != nil {
+			panic(err)
+		}
+		fields := strings.Fields(string(data))
+
+		// Construir mensaje
+		msg := MetricsMessage{
+			UptimeSeconds: fields[0],
+			MemoryUsedKB:  readMemoryUsedKB(),
+			CPUUsagePct:   readCPUUsagePercent(),
+			Timestamp:     time.Now().UTC().Format(time.RFC3339),
+		}
+
+		jsonData, err := json.Marshal(msg)
+		if err != nil {
+			panic(err)
+		}
+
+		// Publicar
+		token := client.Publish("system/metrics", 0, false, jsonData)
+		token.Wait()
+
+		fmt.Println("Published:", string(jsonData))
+	}
 }
+
+// ---------- Helpers ----------
+
 func readMemoryUsedKB() int64 {
 	data, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
@@ -60,8 +74,8 @@ func readMemoryUsedKB() int64 {
 	}
 
 	var memTotal, memAvailable int64
-
 	lines := strings.Split(string(data), "\n")
+
 	for _, line := range lines {
 		if strings.HasPrefix(line, "MemTotal:") {
 			fmt.Sscanf(line, "MemTotal: %d kB", &memTotal)
@@ -73,6 +87,7 @@ func readMemoryUsedKB() int64 {
 
 	return memTotal - memAvailable
 }
+
 func readCPUStat() (idle, total uint64) {
 	data, err := os.ReadFile("/proc/stat")
 	if err != nil {
@@ -100,16 +115,17 @@ func readCPUStat() (idle, total uint64) {
 	total = user + nice + system + idleTime + iowait + irq + softirq + steal
 	return
 }
+
 func readCPUUsagePercent() float64 {
 	idle1, total1 := readCPUStat()
 	time.Sleep(500 * time.Millisecond)
 	idle2, total2 := readCPUStat()
 
-	idleDelta := float64(idle2 - idle1)
 	totalDelta := float64(total2 - total1)
 	if totalDelta == 0 {
 		return 0
 	}
 
+	idleDelta := float64(idle2 - idle1)
 	return (1.0 - idleDelta/totalDelta) * 100.0
 }
