@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type MetricsMessage struct {
@@ -26,6 +27,29 @@ func main() {
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		panic(err)
+	}
+	defer ch.Close()
+
+	queue, err := ch.QueueDeclare(
+		"metrics_internal",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		panic(err)
+	}
 
 	client.Subscribe("system/metrics", 0, func(c mqtt.Client, m mqtt.Message) {
 		var msg MetricsMessage
@@ -43,6 +67,17 @@ func main() {
 			msg.MemoryUsedKB,
 			msg.CPUUsagePct,
 		)
+		ch.Publish(
+			"",
+			queue.Name,
+			false,
+			false,
+			amqp.Publishing{
+				ContentType: "application/json",
+				Body:        m.Payload(),
+			},
+		)
+
 	})
 
 	fmt.Println("Subscribed to MQTT topic system/metrics")
